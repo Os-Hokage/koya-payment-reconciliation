@@ -6,15 +6,34 @@ Run:  python3 reconcile.py
 """
 import json
 
-total = 0.0
-count = 0
+
+def parse_amount(value):
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+    return float(value)
+
+
+latest = {}
 
 with open("payments.jsonl") as f:
     for line in f:
-        event = json.loads(line)
-        if event["status"] == "success":
-            total += float(event["amount"])
-            count += 1
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict) or not event.get("txn_id"):
+            continue
+        current = latest.get(event["txn_id"])
+        if current is None or event["ts"] > current["ts"]:
+            latest[event["txn_id"]] = event
+
+total = 0.0
+count = 0
+
+for event in latest.values():
+    if event["status"] == "success":
+        total += parse_amount(event["amount"])
+        count += 1
 
 with open("expected.txt") as f:
     expected = int(f.read().strip())
